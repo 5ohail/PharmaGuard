@@ -4,7 +4,7 @@ import { Database, Cpu, ShieldCheck, Beaker } from 'lucide-react';
 
 const About = () => {
   const techStack = [
-    { icon: <Cpu />, title: "Gemini 2.0 Flash", desc: "AI engine for pathophysiological explanations." },
+    { icon: <Cpu />, title: "llama-3.1-8b-instant", desc: "AI engine for pathophysiological explanations." },
     { icon: <Database />, title: "CPIC Guidelines", desc: "Evidence-based clinical dosing logic." },
     { icon: <Beaker />, title: "VCF Parsing", desc: "Robust handling of genomic variant files." },
     { icon: <ShieldCheck />, title: "Node.js/Express", desc: "Secure and scalable backend architecture." }
