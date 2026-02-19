@@ -14,7 +14,8 @@ class ReportModel {
       variants, 
       cpicRec, 
       llmExplanation, 
-      parsingSuccess 
+      parsingSuccess,
+      confidence // <--- ADD THIS: Pick up the score passed from the controller
     } = data;
 
     return {
@@ -25,16 +26,17 @@ class ReportModel {
 
       // 2. Risk Assessment
       risk_assessment: {
-        risk_label: cpicRec.risk_label || "Unknown", // Safe|Adjust Dosage|Toxic|...
-        confidence_score: cpicRec.confidence_score || 0.0,
-        severity: cpicRec.severity || "none" // none|low|moderate|high|critical
+        risk_label: cpicRec.risk_label || "Unknown",
+        // FIX: Use the 'confidence' variable passed from the controller instead of cpicRec
+        confidence_score: confidence || 0.0, 
+        severity: cpicRec.severity || "none" 
       },
 
       // 3. Pharmacogenomic Profile
       pharmacogenomic_profile: {
         primary_gene: cpicRec.primary_gene || "Unknown",
         diplotype: cpicRec.diplotype || "*X/*Y",
-        phenotype: cpicRec.phenotype || "Unknown", // PM|IM|NM|RM|URM|Unknown
+        phenotype: cpicRec.phenotype || "Unknown",
         detected_variants: variants.map(v => ({
           rsid: v.rsid,
           genotype: v.genotype,
@@ -44,14 +46,16 @@ class ReportModel {
 
       // 4. Clinical Recommendation
       clinical_recommendation: {
-        action: cpicRec.action || "Consult with a healthcare professional.",
+        action: llmExplanation.clinical_action || cpicRec.action || "Consult with a healthcare professional.",
+        alternatives: llmExplanation.alternatives || [], // ADDED: So your frontend can show alternative drugs
         guideline: "CPIC v4.2"
       },
 
       // 5. LLM Generated Explanation
       llm_generated_explanation: {
         summary: llmExplanation.summary || "No summary available.",
-        biological_mechanism: llmExplanation.mechanism || "Mechanism details pending."
+        // FIX: Mapping 'biological_mechanism' from the AI response
+        biological_mechanism: llmExplanation.biological_mechanism || "Mechanism details pending."
       },
 
       // 6. Quality Metrics

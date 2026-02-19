@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Upload, Activity, FileText, Download, AlertCircle, CheckCircle, RefreshCcw } from 'lucide-react';
+import { Upload, Activity, FileText, Download, AlertCircle, CheckCircle, RefreshCcw, ShieldCheck, Pill } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import axios from 'axios';
@@ -12,49 +12,94 @@ const Dashboard = () => {
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
 
-  // --- PDF GENERATION LOGIC ---
+  // --- ENHANCED PDF GENERATION ---
   const generatePDF = () => {
     if (!result) return;
     const doc = new jsPDF();
-    
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(20);
-    doc.setTextColor(37, 99, 235);
-    doc.text("PharmaGuard Clinical Report", 14, 20);
+    const pageWidth = doc.internal.pageSize.getWidth();
 
+    // 1. Header & Branding
+    doc.setFillColor(30, 41, 59); // Slate-800
+    doc.rect(0, 0, pageWidth, 40, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(24);
+    doc.setFont("helvetica", "bold");
+    doc.text("PHARMAGUARD AI", 14, 25);
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.text("Precision Medicine Clinical Genetic Report", 14, 32);
+    doc.text(`ID: ${result.patient_id}`, pageWidth - 60, 25);
+    doc.text(`Date: ${new Date().toLocaleDateString()}`, pageWidth - 60, 32);
+
+    // 2. Executive Summary
+    doc.setTextColor(30, 41, 59);
+    doc.setFontSize(16);
+    doc.setFont("helvetica", "bold");
+    doc.text("Executive Summary", 14, 55);
+    
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    const summary = result.llm_generated_explanation?.summary || "Analysis successfully completed based on VCF input.";
+    doc.text(doc.splitTextToSize(summary, 180), 14, 62);
+
+    // 3. Pharmacogenomic Profile Table
     autoTable(doc, {
-      startY: 30,
-      head: [['Field', 'Analysis Value']],
+      startY: 75,
+      head: [['Metric', 'Clinical Data Value']],
       body: [
-        ['Patient ID', result.patient_id || "N/A"],
-        ['Target Drug', result.drug],
-        ['Primary Gene', result.pharmacogenomic_profile?.primary_gene || "N/A"],
-        ['Phenotype', result.pharmacogenomic_profile?.phenotype || "N/A"],
-        ['Risk Level', result.risk_assessment?.risk_label || "N/A"]
+        ['Target Medication', result.drug],
+        ['Primary Gene', result.pharmacogenomic_profile?.primary_gene || 'N/A'],
+        ['Diplotype', result.pharmacogenomic_profile?.diplotype || 'N/A'],
+        ['Metabolic Phenotype', result.pharmacogenomic_profile?.phenotype || 'N/A'],
+        ['Risk Assessment', result.risk_assessment?.risk_label || 'N/A'],
+        ['Genomic Confidence', `${result.risk_assessment?.confidence_score || 0}%`],
       ],
-      headStyles: { fillColor: [37, 99, 235] },
-      theme: 'grid'
+      headStyles: { fillColor: [37, 99, 235], fontStyle: 'bold' },
+      theme: 'grid',
     });
 
-    const finalY = doc.lastAutoTable.finalY + 15;
+    // 4. Detailed Biological Mechanism
+    const mechanismY = doc.lastAutoTable.finalY + 15;
     doc.setFontSize(14);
-    doc.text("Clinical Recommendation", 14, finalY);
+    doc.setFont("helvetica", "bold");
+    doc.text("Biological Mechanism & Interpretation", 14, mechanismY);
     
-    doc.setFont("helvetica", "normal");
     doc.setFontSize(10);
-    doc.setTextColor(60);
-    
-    // Safety check for text properties
-    const recText = result.clinical_recommendation?.text || "No recommendation found.";
-    const splitText = doc.splitTextToSize(recText, 180);
-    doc.text(splitText, 14, finalY + 10);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(60, 60, 60);
+    const mechText = result.llm_generated_explanation?.biological_mechanism || "No detailed mechanism provided.";
+    const splitMech = doc.splitTextToSize(mechText, 180);
+    doc.text(splitMech, 14, mechanismY + 8);
 
-    doc.save(`PharmaGuard_${result.drug}_Report.pdf`);
+    // 5. Clinical Recommendation Box
+    const recY = mechanismY + (splitMech.length * 5) + 15;
+    doc.setFillColor(241, 245, 249);
+    doc.rect(14, recY, pageWidth - 28, 30, 'F');
+    doc.setTextColor(30, 41, 59);
+    doc.setFont("helvetica", "bold");
+    doc.text("Clinical Recommendation:", 18, recY + 10);
+    doc.setFont("helvetica", "normal");
+    doc.text(result.clinical_recommendation?.action || "Consult Physician.", 18, recY + 20);
+
+    // 6. Alternative Medications
+    if (result.clinical_recommendation?.alternatives?.length > 0) {
+      doc.setFont("helvetica", "bold");
+      doc.text("Suggested Safe Alternatives:", 14, recY + 45);
+      doc.setFont("helvetica", "normal");
+      doc.text(result.clinical_recommendation.alternatives.join(", "), 14, recY + 52);
+    }
+
+    // 7. Footer
+    doc.setFontSize(8);
+    doc.setTextColor(150);
+    doc.text("Disclaimer: This report is generated by AI and should be verified by a medical professional.", 14, 285);
+
+    doc.save(`Clinical_Report_${result.drug}_${result.patient_id}.pdf`);
   };
 
-  // --- API CALL ---
   const handleRunAnalysis = async () => {
     if (!file) return alert("Please upload a VCF file first.");
+    
     setLoading(true);
     setResult(null);
     setError(null);
@@ -62,14 +107,33 @@ const Dashboard = () => {
     const formData = new FormData();
     formData.append('vcf', file);
     formData.append('drug', drug);
-
+    const ENV = 'development';
+    const BASE_URL = ENV === 'production' ? 'https://pharmaguard-backend.onrender.com/api/v1/analyze' : 'http://localhost:5000/api/v1/analyze';
     try {
-      // Ensure this URL matches your backend port (e.g., 5000)
-      const response = await axios.post('http://localhost:3001/api/v1/analyze', formData);
-      setResult(response.data);
+      const response = await axios.post(BASE_URL, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      
+      const data = response.data;
+      setResult(data);
+
+      // --- SAVE TO LOCAL STORAGE ---
+      const newLog = {
+        drug: data.drug,
+        date: new Date().toLocaleString(),
+        risk: data.risk_assessment?.risk_label || "Unknown",
+        patientId: data.patient_id,
+        severity: data.risk_assessment?.severity
+      };
+
+      const existingLogs = JSON.parse(localStorage.getItem('pgx_logs') || '[]');
+      const updatedLogs = [newLog, ...existingLogs].slice(0, 20); // Keep last 20 reports
+      localStorage.setItem('pgx_logs', JSON.stringify(updatedLogs));
+      // -----------------------------
+
     } catch (err) {
-      console.error(err);
-      setError(err.response?.data?.message || "Analysis failed. Please check if your backend server is running on port 5000.");
+      console.error("❌ Request Failed:", err);
+      setError(err.response?.data?.message || "Server connection failed.");
     } finally {
       setLoading(false);
     }
@@ -80,11 +144,17 @@ const Dashboard = () => {
       <div className="max-w-5xl mx-auto">
         
         {/* Header */}
-        <div className="mb-10">
-          <h1 className="text-4xl font-black text-slate-800 tracking-tighter">
-            Genomic <span className="text-blue-600">Analysis Console</span>
-          </h1>
-          <p className="text-slate-500 font-medium">Industry-standard VCF v4.2 processing engine.</p>
+        <div className="mb-10 flex justify-between items-end">
+          <div>
+            <h1 className="text-4xl font-black text-slate-800 tracking-tighter uppercase">
+              Pharma<span className="text-blue-600">Guard</span> AI
+            </h1>
+            <p className="text-slate-500 font-medium tracking-tight">VCF Precision Interpretation Engine • RIFT 2026</p>
+          </div>
+          <div className="text-right hidden sm:block">
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">System Status</p>
+            <p className="text-emerald-500 font-bold flex items-center gap-1 justify-end"><Activity size={12}/> Operational</p>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -92,24 +162,20 @@ const Dashboard = () => {
           {/* LEFT: Inputs */}
           <div className="lg:col-span-1 space-y-6">
             <div className="bg-white p-6 rounded-[32px] shadow-sm border border-slate-200">
-              <label className="block text-xs font-black uppercase text-slate-400 mb-4 tracking-widest">1. VCF Dataset</label>
+              <label className="block text-[10px] font-black uppercase text-slate-400 mb-4 tracking-widest text-center">Data Intake</label>
               <div 
-                className={`border-2 border-dashed rounded-2xl p-6 transition-all text-center cursor-pointer ${file ? 'border-blue-500 bg-blue-50' : 'border-slate-200 hover:border-blue-400'}`}
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={(e) => { e.preventDefault(); setFile(e.dataTransfer.files[0]); }}
+                className={`border-2 border-dashed rounded-2xl p-6 transition-all text-center cursor-pointer mb-6 ${file ? 'border-blue-500 bg-blue-50' : 'border-slate-200 hover:border-blue-400'}`}
                 onClick={() => document.getElementById('vcf-upload').click()}
               >
                 <input type="file" id="vcf-upload" hidden onChange={(e) => setFile(e.target.files[0])} accept=".vcf" />
                 <Upload className={`mx-auto mb-2 ${file ? 'text-blue-600' : 'text-slate-400'}`} />
-                <p className="text-sm font-bold text-slate-700">{file ? file.name : "Select or Drop VCF"}</p>
-                <p className="text-[10px] text-slate-400 mt-1 uppercase">Max Size: 5MB</p>
+                <p className="text-sm font-bold text-slate-700">{file ? file.name : "Upload VCF Dataset"}</p>
               </div>
 
-              <label className="block text-xs font-black uppercase text-slate-400 mt-8 mb-4 tracking-widest">2. Target Medication</label>
               <select 
                 value={drug}
                 onChange={(e) => setDrug(e.target.value)}
-                className="w-full p-4 rounded-xl bg-slate-100 border-none font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-500 appearance-none"
+                className="w-full p-4 rounded-xl bg-slate-100 border-none font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-500 appearance-none cursor-pointer"
               >
                 {['CODEINE', 'WARFARIN', 'CLOPIDOGREL', 'SIMVASTATIN', 'AZATHIOPRINE', 'FLUOROURACIL'].map(d => (
                   <option key={d} value={d}>{d}</option>
@@ -119,9 +185,9 @@ const Dashboard = () => {
               <button 
                 onClick={handleRunAnalysis}
                 disabled={loading}
-                className="w-full mt-8 py-4 bg-blue-600 text-white rounded-2xl font-black uppercase tracking-widest hover:bg-blue-700 disabled:opacity-50 transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-200"
+                className="w-full mt-6 py-4 bg-blue-600 text-white rounded-2xl font-black uppercase tracking-widest hover:bg-blue-700 transition-all flex items-center justify-center gap-2 shadow-lg disabled:opacity-50"
               >
-                {loading ? <RefreshCcw className="animate-spin" /> : "Run AI Analysis"}
+                {loading ? <RefreshCcw className="animate-spin" /> : "Analyze Genome"}
               </button>
             </div>
           </div>
@@ -132,79 +198,104 @@ const Dashboard = () => {
               {error && (
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-red-50 border border-red-200 p-6 rounded-[32px] flex items-start gap-4 text-red-700 mb-6">
                   <AlertCircle className="shrink-0" />
-                  <div>
-                    <p className="font-black uppercase text-xs mb-1">Error Detected</p>
-                    <p className="text-sm font-medium">{error}</p>
-                  </div>
+                  <p className="text-sm font-medium">{error}</p>
                 </motion.div>
               )}
 
               {result ? (
                 <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
                   
-                  {/* Risk Alert Card */}
-                  <div className={`p-8 rounded-[40px] flex items-center justify-between shadow-xl text-white ${result.risk_assessment?.severity === 'high' || result.risk_assessment?.severity === 'critical' ? 'bg-red-600' : 'bg-green-500'}`}>
+                  {/* Confidence Meter */}
+                  <div className="bg-slate-900 p-6 rounded-[32px] shadow-xl border border-slate-800">
+                    <div className="flex justify-between items-center mb-3">
+                      <div className="flex items-center gap-2">
+                        <ShieldCheck className="text-blue-400" size={16} />
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Confidence Index</span>
+                      </div>
+                      <span className="text-xl font-black text-blue-400">{result.risk_assessment?.confidence_score}%</span>
+                    </div>
+                    <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                      <motion.div 
+                        initial={{ width: 0 }} 
+                        animate={{ width: `${result.risk_assessment?.confidence_score || 0}%` }} 
+                        className="h-full bg-blue-500"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Risk Highlight Card */}
+                  <div className={`p-8 rounded-[40px] flex items-center justify-between shadow-xl text-white ${result.risk_assessment?.severity === 'critical' ? 'bg-red-600' : 'bg-emerald-500'}`}>
                     <div>
-                      <p className="text-xs font-black uppercase opacity-80 tracking-widest">Risk Assessment</p>
+                      <p className="text-xs font-black uppercase opacity-80 tracking-widest">Genomic Risk Label</p>
                       <h2 className="text-4xl font-black tracking-tight">{result.risk_assessment?.risk_label}</h2>
                     </div>
                     <Activity size={48} className="opacity-40" />
                   </div>
 
-                  {/* Details Grid */}
+                  {/* Phenotype Grid */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="bg-white p-6 rounded-[32px] border border-slate-200 shadow-sm">
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">Genomic Profile</p>
-                      <p className="text-xl font-black text-slate-800">{result.pharmacogenomic_profile?.primary_gene} {result.pharmacogenomic_profile?.diplotype}</p>
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">Analyzed Gene</p>
+                      <p className="text-xl font-black text-slate-800">{result.pharmacogenomic_profile?.primary_gene}</p>
                     </div>
                     <div className="bg-white p-6 rounded-[32px] border border-slate-200 shadow-sm">
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">Metabolizer Status</p>
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">Clinical Phenotype</p>
                       <p className="text-xl font-black text-slate-800">{result.pharmacogenomic_profile?.phenotype}</p>
                     </div>
                   </div>
 
-                  {/* Clinical Guidance Section */}
+                  {/* AI Mechanism Card */}
                   <div className="bg-white p-8 rounded-[40px] border border-slate-200 shadow-sm">
-                    <div className="flex items-center gap-2 mb-4">
-                      <CheckCircle className="text-blue-600" size={20} />
-                      <h3 className="font-black text-slate-800 uppercase tracking-tight">Clinical Guidance</h3>
-                    </div>
-                    <p className="text-slate-700 leading-relaxed font-medium text-lg mb-6">
-                      {result.clinical_recommendation?.text}
+                    <h3 className="font-black text-slate-800 uppercase tracking-tight mb-4 flex items-center gap-2">
+                      <CheckCircle className="text-blue-600" size={20} /> Mechanism Interpretation
+                    </h3>
+                    <p className="text-slate-700 leading-relaxed font-medium mb-6">
+                      {result.llm_generated_explanation?.biological_mechanism}
                     </p>
-                    <div className="p-4 bg-blue-50 rounded-2xl border border-blue-100 flex justify-between items-center">
-                      <div>
-                        <p className="text-[10px] font-black text-blue-600 uppercase mb-1">Medical Evidence</p>
-                        <p className="text-xs text-slate-500 font-bold">{result.clinical_recommendation?.guideline}</p>
+                    
+                    <div className="p-5 bg-slate-50 rounded-2xl border border-slate-100 mb-6">
+                      <div className="flex items-center gap-2 mb-2">
+                        <AlertCircle className="text-blue-500" size={16}/>
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Recommended Action</span>
                       </div>
-                      <div className="text-right">
-                        <p className="text-[10px] font-black text-blue-600 uppercase mb-1">Confidence</p>
-                        <p className="text-xs text-slate-500 font-bold">{(result.risk_assessment?.confidence_score * 100)}%</p>
-                      </div>
+                      <p className="text-sm font-bold text-slate-800">{result.clinical_recommendation?.action}</p>
                     </div>
+
+                    {/* Alternatives Section */}
+                    {result.clinical_recommendation?.alternatives?.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {result.clinical_recommendation.alternatives.map((alt, i) => (
+                          <span key={i} className="px-4 py-2 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-full text-[10px] font-black uppercase tracking-wider">
+                            {alt}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   {/* Action Bar */}
-                  <div className="flex gap-4">
-                    <button onClick={generatePDF} className="flex-1 py-4 bg-slate-800 text-white rounded-2xl font-black flex items-center justify-center gap-2 hover:bg-slate-900 transition-all shadow-lg">
-                      <Download size={18} /> Export Clinical PDF
-                    </button>
-                  </div>
+                  <button onClick={generatePDF} className="w-full py-5 bg-slate-900 text-white rounded-[24px] font-black uppercase tracking-widest flex items-center justify-center gap-3 hover:bg-black transition-all shadow-xl">
+                    <Download size={20} /> Export Clinical Report (PDF)
+                  </button>
 
                 </motion.div>
               ) : (
                 !loading && (
-                  <div className="h-full min-h-[400px] border-2 border-dashed border-slate-200 rounded-[40px] flex flex-col items-center justify-center text-slate-400">
-                    <FileText size={48} className="mb-4 opacity-10" />
-                    <p className="font-bold italic">Awaiting Genetic Sequence Input...</p>
+                  <div className="h-[500px] border-2 border-dashed border-slate-200 rounded-[40px] flex flex-col items-center justify-center text-slate-400 bg-white/50">
+                    <FileText size={64} className="mb-4 opacity-5" />
+                    <p className="font-bold italic uppercase text-xs tracking-[0.3em]">Awaiting VCF Data Upload</p>
                   </div>
                 )
               )}
               
               {loading && (
-                <div className="h-full min-h-[400px] flex flex-col items-center justify-center">
-                  <RefreshCcw className="animate-spin text-blue-600 mb-4" size={40} />
-                  <p className="font-black text-slate-600 uppercase tracking-widest">AI Cross-Referencing Guidelines...</p>
+                <div className="h-[500px] flex flex-col items-center justify-center">
+                  <div className="relative mb-6">
+                     <RefreshCcw className="animate-spin text-blue-600" size={48} />
+                     <div className="absolute inset-0 blur-xl bg-blue-400/20 animate-pulse rounded-full"></div>
+                  </div>
+                  <p className="font-black text-slate-800 uppercase tracking-widest">Processing VCF v4.2</p>
+                  <p className="text-xs text-slate-400 font-bold mt-2 uppercase">Consulting CPIC Guidelines...</p>
                 </div>
               )}
             </AnimatePresence>

@@ -1,7 +1,10 @@
 import axios from 'axios';
 
+const ENV =  'development';
+const BASE_URL = ENV === 'production' ? 'https://pharmaguard-backend.onrender.com/api/v1' : 'http://localhost:5000/api/v1';
+
 const instance = axios.create({
-    baseURL: 'http://localhost:3001/api/v1',
+    baseURL: BASE_URL,
 });
 
 export const runPGxAnalysis = async (drug, vcfFile) => {

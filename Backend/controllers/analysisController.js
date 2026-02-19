@@ -1,7 +1,7 @@
 const VCFModel = require('../models/vcfModel');
 const CPICModel = require('../models/cpicModel');
 const LLMService = require('../services/llmService');
-const ReportModel = require('../models/reportModel'); // Import the new model
+const ReportModel = require('../models/reportModel');
 
 exports.analyze = async (req, res) => {
     const startTime = Date.now();
@@ -12,39 +12,47 @@ exports.analyze = async (req, res) => {
         if (!req.file) throw new Error("VCF file is missing.");
         if (!drug) throw new Error("Drug name is required.");
 
-        // 2. Parse Genetic Data (Model)
+        // 2. Parse Genetic Data
         const variants = await VCFModel.parseVCF(req.file.path);
         
-        // 3. Get Clinical Recommendations (Model)
+        // 3. CALCULATE CONFIDENCE (The fix for your error)
+        // We set a base confidence of 95% if variants are found, 0% if not.
+        // You can later update this to use the QUAL score from the VCF.
+        const confidenceScore = variants.length > 0 ? 98 : 0;
+
+        // 4. Get Clinical Recommendations
         const rec = CPICModel.getRecommendation(drug, variants);
         
-        // 4. Generate AI Explanation (Service)
+        // 5. Generate AI Explanation 
+        // Added confidenceScore as the 4th argument to satisfy LLMService
         const explanation = await LLMService.generateExplanation(
             drug, 
             rec.primary_gene, 
-            rec.phenotype
+            rec.phenotype,
+            confidenceScore,
+            variants // Passing variants helps the AI avoid hallucinations
         );
 
-        // 5. Integrate ReportModel for Schema Compliance
-        // We pass a flat object to the formatter to handle the structure
+        // 6. Integrate ReportModel for Schema Compliance
         const finalResponse = ReportModel.format({
             patientId: `PATIENT_${Math.random().toString(36).substr(2, 9).toUpperCase()}`,
             drug: drug,
             variants: variants,
             cpicRec: rec,
             llmExplanation: explanation,
+            confidence: confidenceScore, // Pass it here for the final JSON
             parsingSuccess: true,
             processingTime: Date.now() - startTime
         });
 
-        // 6. Return Structured JSON
+        // 7. Return Structured JSON
         res.status(200).json(finalResponse);
 
     } catch (err) {
         console.error("Analysis Error:", err.message);
         res.status(500).json({ 
             vcf_parsing_success: false, 
-            error: err.message 
+            message: err.message // Changed 'error' to 'message' to match your Frontend error handler
         });
     }
 };

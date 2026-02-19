@@ -9,7 +9,7 @@ const app = express();
 
 // 2. Middleware
 app.use(cors({
-    origin: '*', // Matches your frontend port
+    origin: ['http://localhost:5173','https://pharma-guard-eight.vercel.app'], // Matches your frontend port
     methods: ['POST', 'GET', 'DELETE', 'UPDATE', 'PUT', 'PATCH'],
 }));
 app.use(express.json());
