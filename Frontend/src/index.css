@@ -1,0 +1,19 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    @apply bg-[#e0e5ec] text-slate-800;
+  }
+}
+
+@layer components {
+  .neo-flat {
+    box-shadow: 9px 9px 16px rgb(163,177,198,0.6), -9px -9px 16px rgba(255,255,255, 0.5);
+  }
+  .neo-inset {
+    box-shadow: inset 6px 6px 12px #b8b9be, inset -6px -6px 12px #ffffff;
+  }
+  .glass-card {
+    @apply bg-white/30 backdrop-blur-md border border-white/40 shadow-xl;
+  }
+}
