@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const ENV =  'production';
-const BASE_URL = ENV === 'production' ? 'https://pharmaguard-backend.onrender.com/api/v1' : 'http://localhost:5000/api/v1';
+const BASE_URL = ENV === 'production' ? 'https://pharmaguard-y6gy.onrender.com/api/v1' : 'http://localhost:5000/api/v1';
 
 const instance = axios.create({
     baseURL: BASE_URL,

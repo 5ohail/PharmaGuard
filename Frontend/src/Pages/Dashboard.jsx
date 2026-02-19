@@ -108,7 +108,7 @@ const Dashboard = () => {
     formData.append('vcf', file);
     formData.append('drug', drug);
     const ENV = 'production';
-    const BASE_URL = ENV === 'production' ? 'https://pharmaguard-backend.onrender.com/api/v1/analyze' : 'http://localhost:5000/api/v1/analyze';
+    const BASE_URL = ENV === 'production' ? 'https://pharmaguard-y6gy.onrender.com/api/v1/analyze' : 'http://localhost:5000/api/v1/analyze';
     try {
       const response = await axios.post(BASE_URL, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
