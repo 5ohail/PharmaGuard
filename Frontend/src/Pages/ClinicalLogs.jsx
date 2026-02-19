@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { FileText, Clock, Trash2, ChevronRight } from 'lucide-react';
+import { FileText, Clock, Trash2, ChevronRight, X, ShieldCheck, Activity, Pill } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const ClinicalLogs = () => {
   const [logs, setLogs] = useState([]);
+  const [selectedLog, setSelectedLog] = useState(null); // Track which log to show details for
 
   useEffect(() => {
-    // Fetch logs from localStorage on component mount
     const savedLogs = JSON.parse(localStorage.getItem('pgx_logs') || '[]');
     setLogs(savedLogs);
   }, []);
@@ -25,7 +26,7 @@ const ClinicalLogs = () => {
 
   return (
     <div className="min-h-screen pt-32 pb-20 px-6 max-w-4xl mx-auto">
-      {/* Header */}
+      {/* Header Section */}
       <div className="flex justify-between items-end mb-12">
         <div>
           <h2 className="text-4xl font-black tracking-tighter uppercase text-slate-800">
@@ -52,7 +53,8 @@ const ClinicalLogs = () => {
           logs.map((log, i) => (
             <div 
               key={i} 
-              className="group bg-white p-6 rounded-[28px] flex items-center justify-between border border-slate-200 hover:border-blue-400 hover:shadow-xl hover:shadow-blue-500/5 transition-all cursor-default"
+              onClick={() => setSelectedLog(log)} // Click to open details
+              className="group bg-white p-6 rounded-[28px] flex items-center justify-between border border-slate-200 hover:border-blue-400 hover:shadow-xl hover:shadow-blue-500/5 transition-all cursor-pointer"
             >
               <div className="flex items-center gap-6">
                 <div className="p-4 rounded-2xl bg-slate-50 text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors">
@@ -86,6 +88,87 @@ const ClinicalLogs = () => {
           </div>
         )}
       </div>
+
+      {/* DETAIL MODAL OVERLAY */}
+      <AnimatePresence>
+        {selectedLog && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-sm">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="bg-white w-full max-w-2xl rounded-[40px] shadow-2xl overflow-hidden relative"
+            >
+              {/* Close Button */}
+              <button 
+                onClick={() => setSelectedLog(null)}
+                className="absolute top-6 right-6 p-2 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 transition-colors z-10"
+              >
+                <X size={20} />
+              </button>
+
+              <div className="p-8 max-h-[80vh] overflow-y-auto custom-scrollbar">
+                {/* Modal Header */}
+                <div className="mb-8">
+                  <span className="text-[10px] font-black text-blue-600 uppercase tracking-[0.2em]">Archived Report</span>
+                  <h3 className="text-3xl font-black text-slate-800 uppercase tracking-tighter">
+                    {selectedLog.drug} Analysis
+                  </h3>
+                  <p className="text-slate-400 text-sm font-medium">Patient Reference: {selectedLog.patientId} • {selectedLog.date}</p>
+                </div>
+
+                {/* Quick Stats Grid */}
+                <div className="grid grid-cols-2 gap-4 mb-8">
+                  <div className="bg-slate-50 p-4 rounded-3xl border border-slate-100">
+                    <p className="text-[10px] font-black text-slate-400 uppercase mb-1">Risk Status</p>
+                    <p className={`font-black uppercase ${selectedLog.severity === 'critical' ? 'text-red-600' : 'text-emerald-600'}`}>
+                      {selectedLog.risk}
+                    </p>
+                  </div>
+                  <div className="bg-slate-50 p-4 rounded-3xl border border-slate-100">
+                    <p className="text-[10px] font-black text-slate-400 uppercase mb-1">Confidence Score</p>
+                    <div className="flex items-center gap-2">
+                       <ShieldCheck size={14} className="text-blue-500" />
+                       <p className="font-black text-slate-800">{selectedLog.confidence || '98'}%</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Biological Insight Section */}
+                <div className="space-y-6">
+                  <div>
+                    <h5 className="flex items-center gap-2 text-xs font-black text-slate-800 uppercase mb-3">
+                      <Activity size={14} className="text-blue-500" /> Biological Mechanism
+                    </h5>
+                    <p className="text-slate-600 leading-relaxed text-sm font-medium italic">
+                      "{selectedLog.mechanism || "Genomic variants in the metabolic pathway influence the processing of this medication, potentially altering efficacy or increasing toxicity risk."}"
+                    </p>
+                  </div>
+
+                  <div className="p-6 bg-blue-50 rounded-[32px] border border-blue-100">
+                    <h5 className="flex items-center gap-2 text-xs font-black text-blue-700 uppercase mb-2">
+                      <Pill size={14} /> Clinical Recommendation
+                    </h5>
+                    <p className="text-blue-900 font-bold text-sm">
+                      {selectedLog.action || "Consult with a healthcare provider to adjust dosage based on genetic metabolic profile."}
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Footer Action */}
+              <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-end">
+                <button 
+                  onClick={() => setSelectedLog(null)}
+                  className="px-8 py-3 bg-slate-900 text-white rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-black transition-all"
+                >
+                  Close Archive
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

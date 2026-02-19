@@ -119,12 +119,15 @@ const Dashboard = () => {
 
       // --- SAVE TO LOCAL STORAGE ---
       const newLog = {
-        drug: data.drug,
-        date: new Date().toLocaleString(),
-        risk: data.risk_assessment?.risk_label || "Unknown",
-        patientId: data.patient_id,
-        severity: data.risk_assessment?.severity
-      };
+  drug: data.drug,
+  date: new Date().toLocaleString(),
+  risk: data.risk_assessment?.risk_label,
+  patientId: data.patient_id,
+  severity: data.risk_assessment?.severity,
+  confidence: data.risk_assessment?.confidence_score, // Save this
+  mechanism: data.llm_generated_explanation?.biological_mechanism, // Save this
+  action: data.clinical_recommendation?.action // Save this
+};
 
       const existingLogs = JSON.parse(localStorage.getItem('pgx_logs') || '[]');
       const updatedLogs = [newLog, ...existingLogs].slice(0, 20); // Keep last 20 reports
